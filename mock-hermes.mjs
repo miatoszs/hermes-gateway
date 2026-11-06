@@ -13,9 +13,37 @@ const TOOL_SETS = [
 ];
 const toolsFor = (profile) => TOOL_SETS[[...profile].reduce((h, c) => h + c.charCodeAt(0), 0) % TOOL_SETS.length];
 const RISKY = /\b(deploy|restart|rm\s|delete|reboot|migrat)/i;
+const STATUS_ASK = /\b(status|update|working on|progress)\b/i;
 
-function reply(profile, input) {
+// Scripted replies for the built-in demo squad (npm run demo), so it looks like a real team.
+// Real profiles run in mock mode fall back to the generic reply below.
+const DEMO = {
+  coordinator: {
+    tools: [['kanban_list', 'board=launch status=open'], ['read_file', 'plans/this-week.md']],
+    status: '**Launch week, day 3:** 7 of 10 tasks done.\n\n- ✅ Pricing page copy approved\n- 🔄 Launch post is on draft 2 and needs the researcher\'s numbers\n- ⛔ Staging deploy is waiting on the engineer\n\nNothing is blocked on you yet.',
+  },
+  researcher: {
+    tools: [['web_search', 'competitor pricing 2026'], ['read_file', 'notes/market.md']],
+    status: 'Finished the competitor scan: **12 sources** checked, summary in `notes/market.md`.\n\nTwo numbers still need a second source before the writer can quote them.',
+  },
+  writer: {
+    tools: [['read_file', 'drafts/launch-post.md'], ['write_file', 'drafts/launch-post.md']],
+    status: 'Launch post **draft 2** is ready (~900 words). I\'ll add the researcher\'s numbers once they\'re confirmed, then it\'s yours to review.',
+  },
+  engineer: {
+    tools: [['terminal', 'git log --oneline -3'], ['terminal', 'npm test']],
+    status: 'Staging build is green: **148 tests pass**. I can deploy once the web service is restarted, which needs your approval.',
+    approval: { command: 'sudo systemctl restart web', description: 'Restart the web service on staging' },
+    approved: 'Restarted `web` on staging. The health check is green and the new build is live. ✅',
+    denied: 'Okay, I left the web service running. Tell me when you want to deploy.',
+  },
+};
+
+function reply(profile, input, approval) {
   const ask = input.split('\n').filter(Boolean).pop() || '';
+  const demo = DEMO[profile];
+  if (demo && approval && demo.approved) return approval.choice === 'deny' ? demo.denied : demo.approved;
+  if (demo && STATUS_ASK.test(ask)) return demo.status;
   const ctx = (input.split('\n').filter((l) => /^- [^:]{1,60}: /.test(l))).length;
   return [
     `**${profile}** here (mock Hermes). I got your message:`,
@@ -53,7 +81,7 @@ function startOne(profile, port, key) {
       rateLimited.add(run.session_id);
       return emit(run, 'run.failed', { error: 'HTTP 400: litellm.RateLimitError: Deployment has all max_parallel_requests slots in use.' });
     }
-    for (const [tool, preview] of toolsFor(profile)) {
+    for (const [tool, preview] of DEMO[profile]?.tools || toolsFor(profile)) {
       if (!alive()) return;
       const call = 'call_' + crypto.randomBytes(3).toString('hex');
       emit(run, 'tool.started', { tool, preview, tool_call_id: call });
@@ -62,7 +90,8 @@ function startOne(profile, port, key) {
     }
     if (RISKY.test(run.input)) {
       run.status = 'waiting_for_approval';
-      run.approval = { request_id: 'apr_' + crypto.randomBytes(3).toString('hex'), command: 'sudo systemctl restart example-service', description: 'Restart a system service' };
+      run.approval = { request_id: 'apr_' + crypto.randomBytes(3).toString('hex'),
+        ...(DEMO[profile]?.approval || { command: 'sudo systemctl restart example-service', description: 'Restart a system service' }) };
       emit(run, 'approval.request', { ...run.approval, choices: ['once', 'session', 'deny'] });
       const choice = await new Promise((r) => { run.resolveApproval = r; });
       if (run.status === 'cancelled') return;
@@ -73,14 +102,14 @@ function startOne(profile, port, key) {
       await sleep(600);
       emit(run, 'tool.completed', { tool: 'terminal', duration: 0.6, error: choice === 'deny', preview: choice === 'deny' ? 'BLOCKED: user denied' : 'exit 0', tool_call_id: call });
     }
-    let text = reply(profile, run.input);
-    if (run.approval) text += `\n\nApproval answer received: \`${run.approval.choice}\`.`;
+    let text = reply(profile, run.input, run.approval);
+    if (run.approval && !DEMO[profile]?.approved) text += `\n\nApproval answer received: \`${run.approval.choice}\`.`;
     for (const chunk of text.match(/[\s\S]{1,6}/g)) {
       if (!alive()) return;
       emit(run, 'message.delta', { delta: chunk });
       await sleep(18);
     }
-    emit(run, 'run.completed', { output: text, usage: { input_tokens: run.input.length, output_tokens: text.length, total_tokens: run.input.length + text.length }, runtime: { provider: 'mock', model: `${profile}-mock` } });
+    emit(run, 'run.completed', { output: text, usage: { input_tokens: run.input.length, output_tokens: text.length, total_tokens: run.input.length + text.length }, runtime: { provider: 'demo', model: 'demo-model' } });
   }
 
   const server = http.createServer(async (req, res) => {

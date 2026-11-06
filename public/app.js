@@ -122,7 +122,7 @@ function renderSidebar() {
   }).join('');
   const online = S.agents.filter((a) => a.health?.status === 'online').length;
   $('#onlineCount').textContent = `${online}/${S.agents.length} online`;
-  $('#brandSub').textContent = !S.connected ? 'reconnecting…' : S.mock ? 'mock squad · test mode' : `${S.agents.length} agents`;
+  $('#brandSub').textContent = !S.connected ? 'reconnecting…' : S.mock ? 'demo squad' : `${S.agents.length} agents`;
   const total = Object.values(S.unread).reduce((a, b) => a + b, 0);
   document.title = total ? `(${total}) Hermes Gateway` : 'Hermes Gateway';
 }
@@ -150,15 +150,16 @@ function renderHeader() {
 function agentCard(a, t) {
   const h = a.health || {};
   const sess = t?.messages.slice().reverse().find((m) => m.agent === a.id && m.sessionId)?.sessionId;
+  const full = t?.kind !== 'squad'; // connection details only in the agent's own DM view
   return `<div class="card">
     <div class="top"><button class="avatar-btn" data-settings="${esc(a.id)}" title="Change picture">${avatar(a, 'lg')}</button><div style="min-width:0"><div style="font-weight:700">${esc(a.name)}</div><div class="help">${esc(a.role)}</div></div></div>
     <dl class="kv">
       <dt>Status</dt><dd><span class="pill ${esc(h.status)}">${esc(STATUS_LABEL[h.status] || h.status)}</span>${a.running ? ` · ${a.running} running` : ''}</dd>
       ${h.model ? `<dt>Model</dt><dd>${esc(h.model)}</dd>` : ''}
-      <dt>Profile</dt><dd><code>${esc(a.profile || '—')}</code></dd>
-      <dt>Endpoint</dt><dd><code>${esc(a.baseUrl || '—')}</code></dd>
+      ${a.profile ? `<dt>Profile</dt><dd><code>${esc(a.profile)}</code></dd>` : ''}
+      ${full ? `<dt>Endpoint</dt><dd><code>${esc(a.baseUrl || '—')}</code></dd>
       <dt>API key</dt><dd>${a.hasKey ? `set <span class="help">(${esc(a.keySource)})</span>` : '<span style="color:var(--warn)">missing</span>'}</dd>
-      ${sess ? `<dt>Session</dt><dd><code>${esc(sess)}</code></dd>` : ''}
+      ${sess ? `<dt>Session</dt><dd><code>${esc(sess)}</code></dd>` : ''}` : ''}
       ${h.error && h.status !== 'online' ? `<dt>Error</dt><dd style="color:var(--bad)">${esc(h.error)}</dd>` : ''}
     </dl>
     <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">

@@ -4,6 +4,10 @@ A self-hosted chat dashboard for a squad of [Hermes Agent](https://github.com/No
 Every agent is a contact. `#squad` messages all of them at once, and each agent also has a private DM thread.
 It works with any number of profiles and finds them on its own.
 
+![Hermes Gateway: the #squad channel with replies from four agents and an approval card for a restart command](docs/screenshot.png)
+
+<sub>The built-in demo squad (`npm run demo`): one message to everyone, an `@mention`, and an approval request waiting for a decision.</sub>
+
 - **#squad channel**: one message goes to every agent, or only to the ones you `@mention` (`@all` works too).
   Agents answer side by side, and each one also gets the teammate replies it hasn't seen yet.
 - **DMs**: a private thread per agent, backed by its own Hermes session.
