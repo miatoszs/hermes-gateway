@@ -70,6 +70,23 @@ Each API key is taken from the first of these that is set: `key` in squad.json, 
 See [deploy/hermes-gateway.service](deploy/hermes-gateway.service). Run it as the user that owns `~/.hermes`,
 so it can read the profiles' keys.
 
+## Updating
+
+```bash
+./update.sh         # git pull, then restart the service if anything changed
+```
+
+**Update together with Hermes:** Hermes writes a receipt for every `hermes update` (CLI, desktop or web UI).
+[deploy/hermes-gateway-update.path](deploy/hermes-gateway-update.path) watches for it and runs `update.sh` once
+each update finishes, so `hermes update` updates the dashboard too:
+
+```bash
+sudo cp deploy/hermes-gateway-update.* /etc/systemd/system/   # adjust the Hermes home path and service name first
+sudo systemctl daemon-reload && sudo systemctl enable --now hermes-gateway-update.path
+```
+
+Your `.env`, `squad.json` and `data/` are untracked by git, so updates never touch them.
+
 ## Security
 
 Anyone who can reach the dashboard can run your agents, and through them terminal commands.
