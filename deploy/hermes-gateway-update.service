@@ -1,0 +1,11 @@
+# Run by hermes-gateway-update.path. Runs as root so it can restart the dashboard service;
+# git itself runs as the owner of the checkout. Adjust the paths and service name to your install.
+[Unit]
+Description=Update Hermes Gateway from git
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HERMES_HOME=/home/hermes/.hermes
+Environment=HGW_SERVICE=hermes-gateway
+ExecStart=/opt/hermes-gateway/update.sh --after-hermes

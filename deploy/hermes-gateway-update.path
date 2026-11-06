@@ -1,0 +1,14 @@
+# Updates Hermes Gateway whenever `hermes update` finishes (CLI, desktop or web UI).
+# Hermes writes a receipt to <HERMES_HOME>/logs/update_receipts/ for every update; this watches that folder.
+# Set the folder to the Hermes home of the user that runs Hermes (e.g. /root/.hermes/...), then:
+#   sudo cp deploy/hermes-gateway-update.* /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hermes-gateway-update.path
+[Unit]
+Description=Update Hermes Gateway after hermes update
+
+[Path]
+PathChanged=/home/hermes/.hermes/logs/update_receipts
+Unit=hermes-gateway-update.service
+
+[Install]
+WantedBy=paths.target
