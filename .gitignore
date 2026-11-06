@@ -1,0 +1,7 @@
+# secrets, local config and runtime state: never commit
+.env
+squad.json
+data/
+*.log
+node_modules/
+.DS_Store

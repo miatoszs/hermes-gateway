@@ -1,0 +1,21 @@
+# systemd unit for Hermes Gateway.
+# Install: copy the project to /opt/hermes-gateway, then
+#   sudo cp deploy/hermes-gateway.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hermes-gateway
+# Run it as the same user that owns ~/.hermes, so it can read the profiles' API keys.
+[Unit]
+Description=Hermes Gateway dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Environment=HOME=/home/hermes
+WorkingDirectory=/opt/hermes-gateway
+ExecStart=/usr/bin/env node /opt/hermes-gateway/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

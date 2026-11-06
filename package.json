@@ -1,0 +1,15 @@
+{
+  "name": "hermes-gateway",
+  "version": "1.0.0",
+  "description": "Chat dashboard for a Hermes Agent squad: message every agent at once, DM each one, watch tool calls and answer approvals live.",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": { "hermes-gateway": "server.mjs" },
+  "scripts": {
+    "start": "node server.mjs",
+    "demo": "node server.mjs --mock"
+  },
+  "engines": { "node": ">=18" },
+  "keywords": ["hermes-agent", "nous-research", "multi-agent", "dashboard", "chat", "agents"],
+  "license": "MIT"
+}

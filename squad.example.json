@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "host": "127.0.0.1",
+    "port": 8790,
+    "userName": "the user",
+    "maxParallelPerModel": 1
+  },
+  "discover": true,
+  "exclude": [],
+  "agents": [
+    {
+      "id": "researcher",
+      "profile": "researcher",
+      "name": "Researcher",
+      "role": "Finds and checks facts",
+      "emoji": "🔭",
+      "color": "#3b82f6"
+    },
+    {
+      "id": "remote-helper",
+      "name": "Remote Helper",
+      "role": "Runs on another machine",
+      "baseUrl": "http://hermes-box.local:8643",
+      "keyEnv": "HERMES_KEY_REMOTE_HELPER",
+      "model": "example-model"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hermes Gateway</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪽</text></svg>" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-mark">🪽</span>
+        <div>
+          <div class="brand-name">Hermes Gateway</div>
+          <div class="brand-sub" id="brandSub">connecting…</div>
+        </div>
+      </div>
+      <div class="side-section">Channels</div>
+      <nav id="channelList"></nav>
+      <div class="side-section">Agents <span class="side-count" id="onlineCount"></span></div>
+      <nav id="agentList"></nav>
+      <div class="side-footer">
+        <button class="ghost" id="refreshBtn" title="Re-check every agent">↻ Check agents</button>
+        <button class="ghost" id="themeBtn" title="Toggle theme">◐</button>
+        <a class="ghost" id="logoutBtn" href="/logout" title="Sign out" hidden style="text-decoration:none">⎋</a>
+      </div>
+    </aside>
+
+    <main class="chat">
+      <header class="chat-head">
+        <button class="ghost icon only-mobile" id="menuBtn" aria-label="Open sidebar">☰</button>
+        <div class="head-avatar" id="headAvatar"></div>
+        <div class="head-text">
+          <div class="head-title" id="headTitle"></div>
+          <div class="head-sub" id="headSub"></div>
+        </div>
+        <div class="head-actions">
+          <button class="ghost" id="newSessionBtn" title="Start a fresh Hermes session (agents forget this thread)">New session</button>
+          <button class="ghost" id="clearBtn" title="Clear the transcript and start fresh sessions">Clear</button>
+          <button class="ghost icon" id="detailsBtn" title="Toggle details">ⓘ</button>
+        </div>
+      </header>
+
+      <div class="messages" id="messages"></div>
+
+      <form class="composer" id="composer">
+        <div class="targets" id="targets"></div>
+        <div class="input-row">
+          <div class="mention-pop" id="mentionPop" hidden></div>
+          <textarea id="input" rows="1" placeholder="Message the squad…" autocomplete="off"></textarea>
+          <button type="submit" class="send" id="sendBtn" title="Send (Enter)">➤</button>
+        </div>
+        <div class="hint" id="hint"></div>
+      </form>
+    </main>
+
+    <aside class="details" id="details"></aside>
+  </div>
+  <div class="scrim" id="scrim"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
