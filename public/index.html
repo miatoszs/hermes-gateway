@@ -37,6 +37,7 @@
           <div class="head-sub" id="headSub"></div>
         </div>
         <div class="head-actions">
+          <button class="ghost" id="settingsBtn" hidden title="Profile picture and SOUL.md">Settings</button>
           <button class="ghost" id="newSessionBtn" title="Start a fresh Hermes session (agents forget this thread)">New session</button>
           <button class="ghost" id="clearBtn" title="Clear the transcript and start fresh sessions">Clear</button>
           <button class="ghost icon" id="detailsBtn" title="Toggle details">ⓘ</button>
@@ -59,6 +60,51 @@
     <aside class="details" id="details"></aside>
   </div>
   <div class="scrim" id="scrim"></div>
+
+  <div class="modal" id="settingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="modal-card">
+      <header class="modal-head">
+        <div id="setAvatar"></div>
+        <div class="head-text"><div class="head-title" id="setTitle"></div><div class="head-sub" id="setSub"></div></div>
+        <button class="ghost icon" id="setClose" aria-label="Close">✕</button>
+      </header>
+      <nav class="tabs" role="tablist">
+        <button class="tab on" id="tabProfile" data-tab="profile" role="tab">Profile picture</button>
+        <button class="tab" id="tabSoul" data-tab="soul" role="tab">SOUL.md</button>
+      </nav>
+
+      <section class="pane" id="paneProfile">
+        <div class="pic-drop" id="picDrop">
+          <div id="picPreview"></div>
+          <div class="pic-side">
+            <div style="font-weight:600">Drop an image here, or</div>
+            <div class="btns">
+              <label class="btn primary">Upload picture<input type="file" id="picInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
+              <button class="btn danger" id="picRemove" type="button">Remove</button>
+            </div>
+            <div class="help">PNG, JPEG, WebP or GIF. It's cropped to a square and resized to 256 px. The dashboard stores it; your Hermes profile isn't changed.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane" id="paneSoul" hidden>
+        <div class="soul-bar">
+          <div class="seg"><button class="on" id="soulEditBtn" type="button">Edit</button><button id="soulPreviewBtn" type="button">Preview</button></div>
+          <select id="soulHistory" aria-label="Earlier versions"></select>
+        </div>
+        <div class="help mono" id="soulPath"></div>
+        <div class="soul-warn" id="soulWarn" hidden></div>
+        <textarea id="soulText" spellcheck="false" aria-label="SOUL.md"></textarea>
+        <div class="md soul-preview" id="soulPreview" hidden></div>
+        <footer class="soul-foot">
+          <span class="help" id="soulStats"></span>
+          <label class="check"><input type="checkbox" id="soulFresh" checked> Start fresh sessions, so the next message uses it</label>
+          <button class="btn primary" id="soulSave" type="button" disabled>Save</button>
+        </footer>
+      </section>
+      <div class="set-msg" id="setMsg" role="status"></div>
+    </div>
+  </div>
   <script src="/app.js"></script>
 </body>
 </html>

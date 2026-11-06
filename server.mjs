@@ -150,11 +150,11 @@ function syncAgents(initial = false) {
   for (const a of fresh) {
     const cur = agentById.get(a.id);
     if (cur) {
-      if (!MOCK) {
-        const { health, ...rest } = a;
-        if (JSON.stringify([cur.baseUrl, cur.key, cur.name, cur.role, cur.model]) !== JSON.stringify([a.baseUrl, a.key, a.name, a.role, a.model])) changed = true;
-        Object.assign(cur, rest);
-      }
+      // mock mode keeps its fake endpoints/keys but still follows name/role/model edits
+      const { health, ...rest } = a;
+      const keys = MOCK ? ['name', 'role', 'model'] : Object.keys(rest);
+      if (keys.some((k) => JSON.stringify(cur[k]) !== JSON.stringify(rest[k]))) changed = true;
+      for (const k of keys) cur[k] = rest[k];
       continue;
     }
     agents.push(a); agentById.set(a.id, a); changed = true;
@@ -171,6 +171,7 @@ const publicAgent = (a) => ({
   id: a.id, name: a.name, role: a.role, emoji: a.emoji, color: a.color, profile: a.profile,
   baseUrl: a.baseUrl, hasKey: Boolean(a.key), keySource: a.keySource, health: a.health, apiEnabled: a.apiEnabled,
   running: [...messagesRunning()].filter((m) => m.agent === a.id).length,
+  avatar: avatarUrl(a), soulEditable: Boolean(soulPathOf(a)),
 });
 
 // ---------- state ----------
@@ -505,6 +506,104 @@ async function respondApproval(agent, msg, choice) {
   }
 }
 
+
+// ---------- agent profile pictures (stored by the dashboard in data/avatars, never in Hermes) ----------
+const AVATAR_DIR = path.join(DATA_DIR, 'avatars');
+const AVATAR_MAX_BYTES = 1024 * 1024;
+const AVATAR_TYPES = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' };
+const fileId = (id) => String(id).replace(/[^A-Za-z0-9_.-]/g, '_').replace(/^\.+/, '_');
+function avatarFile(agent) {
+  for (const ext of Object.keys(AVATAR_TYPES)) {
+    const f = path.join(AVATAR_DIR, `${fileId(agent.id)}.${ext}`);
+    if (fs.existsSync(f)) return { file: f, ext };
+  }
+  return null;
+}
+function avatarUrl(agent) {
+  const a = avatarFile(agent);
+  return a ? `/api/agents/${encodeURIComponent(agent.id)}/avatar?v=${Math.round(fs.statSync(a.file).mtimeMs)}` : null;
+}
+// Sniff the real format from the bytes; SVG and everything else is refused.
+function imageKind(buf) {
+  if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return null;
+}
+function saveAvatar(agent, dataUrl) {
+  const m = /^data:image\/[a-z+.-]+;base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(dataUrl || ''));
+  if (!m) throw Object.assign(new Error('Send the picture as a base64 data URL.'), { status: 400 });
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > AVATAR_MAX_BYTES) throw Object.assign(new Error('Picture is larger than 1 MB.'), { status: 413 });
+  const kind = imageKind(buf);
+  if (!kind) throw Object.assign(new Error('Only PNG, JPEG or WebP pictures are allowed.'), { status: 415 });
+  fs.mkdirSync(AVATAR_DIR, { recursive: true });
+  removeAvatar(agent);
+  const f = path.join(AVATAR_DIR, `${fileId(agent.id)}.${kind}`);
+  fs.writeFileSync(`${f}.tmp`, buf); fs.renameSync(`${f}.tmp`, f);
+}
+function removeAvatar(agent) {
+  for (const ext of Object.keys(AVATAR_TYPES)) fs.rmSync(path.join(AVATAR_DIR, `${fileId(agent.id)}.${ext}`), { force: true });
+}
+
+// ---------- SOUL.md editing ----------
+// Hermes reads SOUL.md when a session starts; above ~20k chars (the default floor of
+// context_file_max_chars) it may cut the middle. Every save keeps the previous text in data/soul-history.
+const SOUL_SOFT_LIMIT = 20000;
+const SOUL_HARD_LIMIT = 200000;
+const SOUL_HISTORY_DIR = path.join(DATA_DIR, 'soul-history');
+const SOUL_HISTORY_KEEP = 30;
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+function soulPathOf(agent) {
+  if (agent?.profile && /^[A-Za-z0-9_.-]+$/.test(agent.profile) && !agent.profile.startsWith('.')) {
+    const dir = profileDir(agent.profile);
+    return fs.existsSync(dir) ? path.join(dir, 'SOUL.md') : null;
+  }
+  // demo agents get a scratch SOUL.md so the editor can be tried without Hermes
+  return MOCK && !agent?.profile ? path.join(DATA_DIR, 'demo-profiles', fileId(agent.id), 'SOUL.md') : null;
+}
+function soulHistory(agent) {
+  const dir = path.join(SOUL_HISTORY_DIR, fileId(agent.id));
+  try {
+    return fs.readdirSync(dir).filter((f) => /^\d+\.md$/.test(f)).sort().reverse()
+      .map((f) => ({ id: f, ts: Number(f.slice(0, -3)), size: fs.statSync(path.join(dir, f)).size }));
+  } catch { return []; }
+}
+function readSoul(agent) {
+  const file = soulPathOf(agent);
+  if (!file) return null;
+  let content = '', exists = true;
+  try { content = fs.readFileSync(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; exists = false; }
+  return {
+    agent: agent.id, path: file, exists, content, hash: sha256(content), softLimit: SOUL_SOFT_LIMIT,
+    distribution: fs.existsSync(path.join(path.dirname(file), 'distribution.yaml')), history: soulHistory(agent),
+  };
+}
+function writeSoul(agent, content) {
+  const file = soulPathOf(agent);
+  let st = null; try { st = fs.statSync(file); } catch { /* new file */ }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (st) {
+    const hdir = path.join(SOUL_HISTORY_DIR, fileId(agent.id));
+    fs.mkdirSync(hdir, { recursive: true, mode: 0o700 });
+    fs.copyFileSync(file, path.join(hdir, `${Date.now()}.md`));
+    for (const old of soulHistory(agent).slice(SOUL_HISTORY_KEEP)) fs.rmSync(path.join(hdir, old.id), { force: true });
+  }
+  // atomic replace that keeps the original file's mode and owner
+  const tmp = path.join(path.dirname(file), `.SOUL.md.hgw-${crypto.randomBytes(4).toString('hex')}`);
+  fs.writeFileSync(tmp, content, { mode: st ? st.mode & 0o777 : 0o644 });
+  if (st) { try { fs.chownSync(tmp, st.uid, st.gid); } catch { /* not root: keep our ownership */ } }
+  fs.renameSync(tmp, file);
+}
+function freshSessionsFor(agentId, reason) {
+  for (const k of Object.keys(state.sessions)) if (k.endsWith(`|${agentId}`)) delete state.sessions[k];
+  for (const k of Object.keys(state.seen)) if (k.endsWith(`|${agentId}`)) delete state.seen[k];
+  for (const tid of ['squad', `dm:${agentId}`]) {
+    const t = state.threads[tid];
+    if (t) addMessage(t, { id: uid('m'), role: 'system', text: `${reason} · new Hermes session for ${agentId}`, ts: Date.now() });
+  }
+}
+
 // resume runs that were live when the dashboard last stopped
 for (const m of messagesRunning()) {
   const a = agentById.get(m.agent);
@@ -514,9 +613,9 @@ for (const m of messagesRunning()) {
 // ---------- http ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
-async function readBody(req) {
+async function readBody(req, limit = 1e6) {
   let size = 0; const chunks = [];
-  for await (const c of req) { size += c.length; if (size > 1e6) throw Object.assign(new Error('body too large'), { status: 413 }); chunks.push(c); }
+  for await (const c of req) { size += c.length; if (size > limit) throw Object.assign(new Error('body too large'), { status: 413 }); chunks.push(c); }
   try { return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}; } catch { throw Object.assign(new Error('invalid JSON'), { status: 400 }); }
 }
 function findMessage(id) {
@@ -593,6 +692,42 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/whoami') return json(res, 200, { ok: true });
     if (p === '/api/agents/refresh' && req.method === 'POST') { syncAgents(); await healthLoop(); pushAgents(); return json(res, 200, { ok: true }); }
+
+    if ((m = p.match(/^\/api\/agents\/([^/]+)\/(avatar|soul|soul\/history\/(\d+\.md))$/))) {
+      const agent = agentById.get(decodeURIComponent(m[1]));
+      if (!agent) return json(res, 404, { error: 'unknown agent' });
+      if (m[2] === 'avatar') {
+        if (req.method === 'GET') {
+          const a = avatarFile(agent);
+          if (!a) return json(res, 404, { error: 'no picture' });
+          res.writeHead(200, { 'Content-Type': AVATAR_TYPES[a.ext], 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+          return fs.createReadStream(a.file).pipe(res);
+        }
+        if (req.method === 'PUT') { saveAvatar(agent, (await readBody(req, 2e6)).dataUrl); pushAgents(); return json(res, 200, { avatar: avatarUrl(agent) }); }
+        if (req.method === 'DELETE') { removeAvatar(agent); pushAgents(); return json(res, 200, { avatar: null }); }
+      }
+      if (!soulPathOf(agent)) return json(res, 400, { error: 'This agent has no local Hermes profile, so its SOUL.md can only be edited on its own machine.' });
+      if (m[3] && req.method === 'GET') {
+        const f = path.join(SOUL_HISTORY_DIR, fileId(agent.id), m[3]);
+        try { return json(res, 200, { id: m[3], content: fs.readFileSync(f, 'utf8') }); } catch { return json(res, 404, { error: 'no such version' }); }
+      }
+      if (m[2] === 'soul' && req.method === 'GET') return json(res, 200, readSoul(agent));
+      if (m[2] === 'soul' && req.method === 'PUT') {
+        const body = await readBody(req);
+        if (typeof body.content !== 'string') return json(res, 400, { error: 'content must be a string' });
+        if (body.content.length > SOUL_HARD_LIMIT) return json(res, 413, { error: `SOUL.md is limited to ${SOUL_HARD_LIMIT} characters here.` });
+        const cur = readSoul(agent);
+        if (body.baseHash !== cur.hash) return json(res, 409, { error: 'SOUL.md changed on disk since you opened it.', current: cur });
+        if (body.content !== cur.content) {
+          writeSoul(agent, body.content);
+          if (body.freshSession !== false) freshSessionsFor(agent.id, 'SOUL.md updated');
+          syncAgents();
+          pushAgents();
+        }
+        return json(res, 200, readSoul(agent));
+      }
+      return json(res, 405, { error: 'method not allowed' });
+    }
 
     if ((m = p.match(/^\/api\/threads\/([^/]+)\/messages$/)) && req.method === 'POST') {
       const thread = state.threads[decodeURIComponent(m[1])];

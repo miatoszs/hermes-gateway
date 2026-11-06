@@ -170,6 +170,54 @@ textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent
 
 .scrim { display: none; }
 
+/* profile pictures */
+.avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.avatar.has-img { background: var(--panel-3) !important; border: 0 !important; }
+.avatar.xl { width: 112px; height: 112px; font-size: 52px; }
+.head-avatar.clickable, .avatar-btn { cursor: pointer; border: 0; background: none; padding: 0; }
+
+/* agent settings modal */
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(4, 6, 12, .6); padding: 16px; }
+.modal[hidden] { display: none; }
+body.modal-open { overflow: hidden; }
+.modal-card { width: min(860px, 100%); height: min(760px, calc(100dvh - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.modal-head { display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.tabs { display: flex; flex-direction: row; gap: 4px; padding: 8px 12px 0; border-bottom: 1px solid var(--line); }
+.tab { border: 0; background: none; padding: 8px 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.tab[hidden] { display: none; }
+.pane { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px; gap: 10px; overflow: auto; }
+.pane[hidden] { display: none; }
+.pic-drop { display: flex; gap: 22px; align-items: center; border: 2px dashed var(--line); border-radius: 16px; padding: 22px; flex-wrap: wrap; }
+.pic-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.pic-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1 1 240px; }
+.pic-side .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.pic-side label.btn { cursor: pointer; }
+.soul-bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: none; padding: 5px 14px; color: var(--muted); }
+.seg button.on { background: var(--panel-3); color: var(--text); }
+select { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 5px 8px; max-width: 100%; }
+.mono { font-family: var(--mono); font-size: 11.5px; overflow-wrap: anywhere; }
+.soul-warn { border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--panel-2)); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.soul-warn[hidden] { display: none; }
+#soulText { flex: 1; min-height: 240px; max-height: none; resize: none; width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--code-bg); padding: 12px 14px; font: 13px/1.55 var(--mono); color: var(--text); }
+#soulText:focus { border-color: var(--accent); }
+.soul-preview { flex: 1; min-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; background: var(--panel-2); }
+.soul-preview[hidden], #soulText[hidden] { display: none; }
+.soul-foot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.soul-foot .help { margin-right: auto; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.set-msg { min-height: 0; font-size: 13px; padding: 0 16px; }
+.set-msg:not(:empty) { padding: 8px 16px; border-top: 1px solid var(--line); }
+.set-msg.err { color: var(--bad); }
+@media (max-width: 760px) {
+  .modal { padding: 0; }
+  .modal-card { height: 100dvh; border-radius: 0; border: 0; }
+  .pic-drop { justify-content: center; text-align: center; }
+  .soul-foot .help { width: 100%; }
+}
+
 @media (max-width: 1100px) {
   .app, .app.no-details { grid-template-columns: 260px minmax(0, 1fr) 0; }
   .details { display: none; }

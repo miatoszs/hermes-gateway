@@ -26,7 +26,8 @@ const ACTIVE = new Set(['queued', 'running', 'waiting', 'stopping']);
 
 function avatar(a, cls = '', dot = true) {
   if (!a) return `<div class="avatar ${cls}" style="background:var(--panel-3)">?</div>`;
-  return `<div class="avatar ${cls}" style="background:${esc(a.color)}26;border:1px solid ${esc(a.color)}66">${esc(a.emoji)}${dot ? `<span class="dot ${esc(a.health?.status)}"></span>` : ''}</div>`;
+  const face = a.avatar ? `<img src="${esc(a.avatar)}" alt="" loading="lazy" decoding="async">` : esc(a.emoji);
+  return `<div class="avatar ${cls}${a.avatar ? ' has-img' : ''}" style="background:${esc(a.color)}26;border:1px solid ${esc(a.color)}66">${face}${dot ? `<span class="dot ${esc(a.health?.status)}"></span>` : ''}</div>`;
 }
 
 function md(src) {
@@ -132,22 +133,25 @@ function renderHeader() {
   if (!t) return;
   if (t.kind === 'squad') {
     $('#headAvatar').innerHTML = S.agents.slice(0, 5).map((a) => avatar(a, '', false)).join('');
+    $('#settingsBtn').hidden = true;
     $('#headTitle').textContent = '# squad';
     $('#headSub').textContent = `${S.agents.map((a) => a.name).join(', ')} · @mention to target, otherwise everyone gets it`;
     $('#input').placeholder = 'Message the squad… (@ to mention)';
   } else {
     const a = agent(t.agent);
-    $('#headAvatar').innerHTML = avatar(a, '');
+    $('#headAvatar').innerHTML = a ? `<button class="avatar-btn" data-settings="${esc(a.id)}" title="Agent settings">${avatar(a, '')}</button>` : avatar(a, '');
     $('#headTitle').textContent = a?.name || t.agent;
     $('#headSub').textContent = `${a?.role || ''} · ${STATUS_LABEL[a?.health?.status] || ''}${a?.health?.model ? ' · ' + a.health.model : ''}`;
     $('#input').placeholder = `Message ${a?.name || t.agent}…`;
+    $('#settingsBtn').hidden = !a;
+    $('#settingsBtn').dataset.settings = a?.id || '';
   }
 }
 function agentCard(a, t) {
   const h = a.health || {};
   const sess = t?.messages.slice().reverse().find((m) => m.agent === a.id && m.sessionId)?.sessionId;
   return `<div class="card">
-    <div class="top">${avatar(a, 'lg')}<div style="min-width:0"><div style="font-weight:700">${esc(a.name)}</div><div class="help">${esc(a.role)}</div></div></div>
+    <div class="top"><button class="avatar-btn" data-settings="${esc(a.id)}" title="Change picture">${avatar(a, 'lg')}</button><div style="min-width:0"><div style="font-weight:700">${esc(a.name)}</div><div class="help">${esc(a.role)}</div></div></div>
     <dl class="kv">
       <dt>Status</dt><dd><span class="pill ${esc(h.status)}">${esc(STATUS_LABEL[h.status] || h.status)}</span>${a.running ? ` · ${a.running} running` : ''}</dd>
       ${h.model ? `<dt>Model</dt><dd>${esc(h.model)}</dd>` : ''}
@@ -157,7 +161,11 @@ function agentCard(a, t) {
       ${sess ? `<dt>Session</dt><dd><code>${esc(sess)}</code></dd>` : ''}
       ${h.error && h.status !== 'online' ? `<dt>Error</dt><dd style="color:var(--bad)">${esc(h.error)}</dd>` : ''}
     </dl>
-    ${t?.kind === 'squad' ? `<div style="margin-top:10px;display:flex;gap:6px"><button class="btn" data-dm="${esc(a.id)}">Open DM</button><button class="btn" data-reset-agent="${esc(a.id)}">New session</button></div>` : ''}
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      ${a.soulEditable ? `<button class="btn" data-settings="${esc(a.id)}" data-tab="soul">Edit SOUL.md</button>` : ''}
+      <button class="btn" data-settings="${esc(a.id)}">Picture</button>
+      ${t?.kind === 'squad' ? `<button class="btn" data-dm="${esc(a.id)}">Open DM</button><button class="btn" data-reset-agent="${esc(a.id)}">New session</button>` : ''}
+    </div>
   </div>`;
 }
 function renderDetails() {
@@ -213,7 +221,7 @@ function msgHtml(m, t) {
   const tokens = m.usage?.total_tokens ? `${m.usage.total_tokens.toLocaleString()} tok` : '';
   const dur = m.endedAt && m.ts ? `${((m.endedAt - m.ts) / 1000).toFixed(1)}s` : '';
   const model = m.runtime?.model || '';
-  return `<div class="msg agent">${avatar(a, '', false)}<div class="body">
+  return `<div class="msg agent"><button class="avatar-btn" data-settings="${esc(m.agent)}" title="Agent settings" style="align-self:flex-start">${avatar(a, '', false)}</button><div class="body">
     <div class="msg-head"><b style="color:${esc(a?.color || 'inherit')}">${esc(a?.name || m.agent)}</b><span>${time(m.ts)}</span>
       ${m.status !== 'completed' ? `<span class="status ${esc(m.status)}">${active ? '<span class="spinner"></span>' : ''}${esc(RUN_LABEL[m.status] || m.status)}</span>` : ''}</div>
     ${stepsHtml(m)}
@@ -399,6 +407,9 @@ function connect() {
   es.addEventListener('agents', (e) => {
     S.agents = JSON.parse(e.data);
     renderSidebar(); renderHeader(); renderDetails(); updateHint();
+    if (!$('#settingsModal').hidden) renderSettingsHead();
+    rememberOpen();
+    if (S.active && S.threads[S.active]) for (const m of S.threads[S.active].messages) if (m.role === 'agent' && S.rendered.has(m.id)) S.rendered.get(m.id).innerHTML = msgHtml(m, thread());
   });
   es.addEventListener('thread', (e) => {
     const t = JSON.parse(e.data);
@@ -487,6 +498,165 @@ $('#detailsBtn').addEventListener('click', () => {
 $('#menuBtn').addEventListener('click', () => $('#app').classList.add('show-side'));
 $('#scrim').addEventListener('click', () => $('#app').classList.remove('show-side', 'show-details'));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { S.unread[S.active] = 0; store.set('unread', S.unread); renderSidebar(); } });
+
+
+// ---------- agent settings: profile picture + SOUL.md ----------
+const SE = { agent: null, soul: null, original: '', busy: false };
+const enc = encodeURIComponent;
+async function apiJson(method, url, body) {
+  const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j });
+  return j;
+}
+function flash(text, isErr = false) {
+  const el = $('#setMsg');
+  el.textContent = text; el.classList.toggle('err', isErr);
+  clearTimeout(flash.t); if (!isErr) flash.t = setTimeout(() => { el.textContent = ''; }, 5000);
+}
+const soulDirty = () => Boolean(SE.soul) && $('#soulText').value !== SE.original;
+
+function renderSettingsHead() {
+  const a = agent(SE.agent);
+  if (!a) return;
+  $('#setAvatar').innerHTML = avatar(a, 'lg', false);
+  $('#setTitle').textContent = a.name;
+  $('#setSub').textContent = [a.role, a.profile ? `profile: ${a.profile}` : ''].filter(Boolean).join(' · ');
+  $('#tabSoul').hidden = !a.soulEditable;
+  $('#picPreview').innerHTML = avatar(a, 'xl', false);
+  $('#picRemove').hidden = !a.avatar;
+}
+function setSettingsTab(tab) {
+  for (const b of document.querySelectorAll('.tab')) b.classList.toggle('on', b.dataset.tab === tab);
+  $('#paneProfile').hidden = tab !== 'profile';
+  $('#paneSoul').hidden = tab !== 'soul';
+  if (tab === 'soul') setTimeout(() => $('#soulText').focus(), 0);
+}
+async function openSettings(id, tab = 'profile') {
+  const a = agent(id);
+  if (!a) return;
+  SE.agent = id; SE.soul = null; SE.original = '';
+  $('#soulText').value = ''; $('#setMsg').textContent = ''; $('#soulWarn').hidden = true;
+  $('#soulText').hidden = false; $('#soulPreview').hidden = true;
+  $('#soulEditBtn').classList.add('on'); $('#soulPreviewBtn').classList.remove('on');
+  $('#settingsModal').hidden = false; document.body.classList.add('modal-open');
+  $('#app').classList.remove('show-side', 'show-details');
+  renderSettingsHead();
+  setSettingsTab(tab === 'soul' && a.soulEditable ? 'soul' : 'profile');
+  if (a.soulEditable) await loadSoul();
+}
+function closeSettings() {
+  if (soulDirty() && !confirm('Discard your unsaved SOUL.md changes?')) return;
+  $('#settingsModal').hidden = true; document.body.classList.remove('modal-open');
+  SE.agent = null; SE.soul = null;
+}
+
+// SOUL.md
+async function loadSoul() {
+  $('#soulText').disabled = true;
+  try { applySoul(await apiJson('GET', `/api/agents/${enc(SE.agent)}/soul`), true); }
+  catch (e) { flash(e.message, true); }
+  finally { $('#soulText').disabled = false; }
+}
+function applySoul(s, resetText) {
+  SE.soul = s; SE.original = s.content;
+  if (resetText) $('#soulText').value = s.content;
+  $('#soulPath').textContent = s.path + (s.exists ? '' : '  (new file: Hermes uses its default until you save)');
+  $('#soulHistory').innerHTML = `<option value="">${s.history.length ? `Earlier versions (${s.history.length})` : 'No earlier versions yet'}</option>` +
+    s.history.map((h) => `<option value="${esc(h.id)}">${esc(new Date(h.ts).toLocaleString())} · ${h.size.toLocaleString()} bytes</option>`).join('');
+  $('#soulHistory').disabled = !s.history.length;
+  updateSoulStats();
+}
+function updateSoulStats() {
+  const t = $('#soulText').value;
+  const words = (t.match(/\S+/g) || []).length;
+  const limit = SE.soul?.softLimit || 20000;
+  $('#soulStats').innerHTML = `${words.toLocaleString()} words · ${t.length.toLocaleString()} characters${soulDirty() ? ' · <b>unsaved changes</b>' : ''}`;
+  const warns = [];
+  if (t.length > limit) warns.push(`Over ${limit.toLocaleString()} characters: Hermes may cut the middle of this file, depending on the model's context size.`);
+  if (SE.soul?.distribution) warns.push('This profile was installed from a distribution: <code>hermes profile update</code> may replace your edits.');
+  $('#soulWarn').innerHTML = warns.join('<br>'); $('#soulWarn').hidden = !warns.length;
+  $('#soulSave').disabled = !soulDirty() || SE.busy;
+  if (!$('#soulPreview').hidden) $('#soulPreview').innerHTML = md(t);
+}
+async function saveSoul() {
+  if (!SE.soul || SE.busy || !soulDirty()) return;
+  SE.busy = true; updateSoulStats();
+  const fresh = $('#soulFresh').checked;
+  try {
+    const s = await apiJson('PUT', `/api/agents/${enc(SE.agent)}/soul`, { content: $('#soulText').value, baseHash: SE.soul.hash, freshSession: fresh });
+    applySoul(s, false);
+    flash(fresh ? 'Saved. Fresh sessions started, so the next message uses the new SOUL.md.' : 'Saved. New Hermes sessions will use it.');
+  } catch (e) {
+    if (e.status === 409 && e.body?.current) {
+      const overwrite = confirm('SOUL.md was changed on disk after you opened it (by Hermes, an agent or another editor).\n\nOK: overwrite it with your version.\nCancel: keep the file on disk and load it here (your edits are discarded).');
+      if (overwrite) { SE.soul.hash = e.body.current.hash; SE.busy = false; return saveSoul(); }
+      applySoul(e.body.current, true); flash('Loaded the version on disk.');
+    } else flash(`Could not save: ${e.message}`, true);
+  } finally { SE.busy = false; updateSoulStats(); }
+}
+
+// profile picture: center-crop to a square and shrink to 256 px in the browser
+async function uploadPicture(file) {
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return flash('Choose a PNG, JPEG, WebP or GIF image.', true);
+  if (file.size > 25 * 1024 * 1024) return flash('That image is too large (over 25 MB).', true);
+  try {
+    flash('Uploading…');
+    const bmp = await createImageBitmap(file);
+    const side = Math.min(bmp.width, bmp.height), size = Math.min(256, side);
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+    g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+    let url = c.toDataURL('image/webp', 0.9);
+    if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
+    await apiJson('PUT', `/api/agents/${enc(SE.agent)}/avatar`, { dataUrl: url });
+    flash('Picture saved.');
+  } catch (e) { flash(e.message || 'Could not read that image.', true); }
+}
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-settings]');
+  if (el && el.dataset.settings) { e.preventDefault(); openSettings(el.dataset.settings, el.dataset.tab); }
+});
+$('#setClose').addEventListener('click', closeSettings);
+$('#settingsModal').addEventListener('mousedown', (e) => { if (e.target.id === 'settingsModal') closeSettings(); });
+for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setSettingsTab(b.dataset.tab));
+$('#soulText').addEventListener('input', updateSoulStats);
+$('#soulText').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveSoul(); }
+  if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); document.execCommand('insertText', false, '  '); }
+});
+$('#soulSave').addEventListener('click', saveSoul);
+$('#soulEditBtn').addEventListener('click', () => {
+  $('#soulEditBtn').classList.add('on'); $('#soulPreviewBtn').classList.remove('on');
+  $('#soulText').hidden = false; $('#soulPreview').hidden = true; $('#soulText').focus();
+});
+$('#soulPreviewBtn').addEventListener('click', () => {
+  $('#soulPreviewBtn').classList.add('on'); $('#soulEditBtn').classList.remove('on');
+  $('#soulPreview').innerHTML = md($('#soulText').value); $('#soulText').hidden = true; $('#soulPreview').hidden = false;
+});
+$('#soulHistory').addEventListener('change', async (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  if (soulDirty() && !confirm('Replace your unsaved changes with this earlier version?')) { e.target.value = ''; return; }
+  try {
+    const v = await apiJson('GET', `/api/agents/${enc(SE.agent)}/soul/history/${enc(id)}`);
+    $('#soulText').value = v.content; updateSoulStats();
+    flash(`Loaded the version from ${new Date(Number(id.slice(0, -3))).toLocaleString()}. Save to restore it.`);
+  } catch (err) { flash(err.message, true); }
+  e.target.value = '';
+});
+$('#picInput').addEventListener('change', (e) => { uploadPicture(e.target.files[0]); e.target.value = ''; });
+$('#picRemove').addEventListener('click', async () => {
+  try { await apiJson('DELETE', `/api/agents/${enc(SE.agent)}/avatar`); flash('Picture removed.'); } catch (e) { flash(e.message, true); }
+});
+const drop = $('#picDrop');
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); uploadPicture(e.dataTransfer.files[0]); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#settingsModal').hidden) closeSettings(); });
+window.addEventListener('beforeunload', (e) => { if (soulDirty()) { e.preventDefault(); e.returnValue = ''; } });
 
 if (!store.get('theme', null) && matchMedia('(prefers-color-scheme: light)').matches) document.documentElement.dataset.theme = 'light';
 connect();

@@ -9,6 +9,10 @@ It works with any number of profiles and finds them on its own.
 - **DMs**: a private thread per agent, backed by its own Hermes session.
 - **Live runs**: streaming replies, tool calls with their results, subagent notes, a Stop button, and
   **approval cards** (Allow once / for session / Always / Deny) when Hermes gates a command.
+- **Agent settings**: give each agent a **profile picture** (cropped and resized in the browser, stored by the
+  dashboard), and **edit its `SOUL.md`** with a live preview, word count, a warning near Hermes' size cap,
+  and the last 30 versions kept for restore. Saving can start fresh Hermes sessions so the next message
+  already uses the new SOUL.md. If the file changed on disk meanwhile, you're asked before anything is overwritten.
 - **Auto-discovery**: every profile in `~/.hermes/profiles` with its API server on shows up, using its name,
   role and model from `profile.yaml`, `SOUL.md` and `config.yaml`. New profiles appear without a restart.
 - **Shared-model friendly**: agents on the same LLM take turns, and "rate limit" or "slots in use" errors are retried.
